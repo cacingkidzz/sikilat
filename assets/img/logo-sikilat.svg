@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Logo SIKILAT">
+    <defs>
+        <linearGradient id="sikilatGradient" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#0d6efd"/>
+            <stop offset="1" stop-color="#083b8f"/>
+        </linearGradient>
+    </defs>
+    <rect width="64" height="64" rx="16" fill="url(#sikilatGradient)"/>
+    <rect x="17" y="13" width="30" height="40" rx="6" fill="#ffffff" opacity="0.97"/>
+    <rect x="25" y="9" width="14" height="9" rx="3.5" fill="#ffffff"/>
+    <rect x="25" y="9" width="14" height="9" rx="3.5" fill="none" stroke="#cfe2ff" stroke-width="1"/>
+    <path d="M23.5 31.5l5.2 5.3L39 25.5" fill="none" stroke="#0d6efd" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="23.5" y="41" width="17" height="3.2" rx="1.6" fill="#0d6efd" opacity="0.35"/>
+    <rect x="23.5" y="47" width="11" height="3.2" rx="1.6" fill="#0d6efd" opacity="0.22"/>
+</svg>

@@ -1,0 +1,45 @@
+# SIKILAT - berkas yang tidak perlu masuk repositori
+
+# Dependensi (pasang dengan `composer install`)
+/vendor/
+
+# Konfigurasi lokal & rahasia
+/config/database.local.php
+/.env
+/.env.*
+
+# Log & cache
+/logs/*.log
+/logs/*.txt
+!/logs/.gitkeep
+
+# Unggahan pengguna (logo sekolah)
+/uploads/logo/*
+!/uploads/logo/.gitkeep
+
+# Cadangan dan ekspor sementara
+*.bak
+*.old
+*.orig
+*.tmp
+*.log
+*.sql.gz
+/*.sql
+/*.pdf
+/*.xlsx
+/*.csv
+/*.zip
+!/database/**/*.sql
+
+# Berkas sistem operasi / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+/.idea/
+/.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Berkas sementara pengujian
+/_tmp_*
+/_tmp/

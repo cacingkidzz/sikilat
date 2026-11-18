@@ -1,0 +1,16 @@
+# Folder unggahan: hanya file gambar yang boleh diakses, PHP dilarang.
+Options -Indexes
+
+<FilesMatch "(?i)\.(php|phtml|phar|php[0-9]|cgi|pl|py|sh|exe|bat|cmd|js|html?|svg|xml|htaccess)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>

@@ -1,0 +1,26 @@
+# Normalisasi akhir baris: simpan LF di repositori, checkout sesuai OS.
+* text=auto eol=lf
+
+*.php    text
+*.css    text
+*.js     text
+*.json   text
+*.md     text
+*.sql    text
+*.yml    text
+*.yaml   text
+*.xml    text
+*.htaccess text
+
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.webp   binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.eot    binary
+*.pdf    binary
+*.zip    binary

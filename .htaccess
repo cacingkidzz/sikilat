@@ -1,0 +1,31 @@
+# SIKILAT - Konfigurasi Apache
+# Berlaku pada Apache 2.4 (XAMPP) dan hosting cPanel berbasis LiteSpeed/Apache.
+
+Options -Indexes
+DirectoryIndex index.php index.html
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Blokir akses web langsung ke folder internal
+    RewriteRule ^(?:config|includes|database|libraries|logs|docs|tools|vendor)(?:/|$) - [F,L,NC]
+
+    # Blokir file/dotfile tersembunyi (kecuali .well-known)
+    RewriteRule (^|/)\.(?!well-known) - [F,L]
+</IfModule>
+
+# Blokir file yang tidak boleh diunduh publik
+<FilesMatch "(?i)\.(sql|md|json|lock|log|ini|bak|old|orig|dist|example|sqlite)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Jangan tampilkan signature server
+<IfModule mod_headers.c>
+    Header unset X-Powered-By
+</IfModule>

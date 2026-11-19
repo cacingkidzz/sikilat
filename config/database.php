@@ -13,10 +13,10 @@ declare(strict_types=1);
  *   <?php
  *   return [
  *       'host' => 'localhost',
- *       'port' => 3306,
- *       'name' => 'namadb_cpanel',
- *       'user' => 'user_cpanel',
- *       'pass' => 'password_cpanel',
+ *       'port' => 22,
+ *       'name' => 'sikilat',
+ *       'user' => 'sikilat',
+ *       'pass' => '8aXHtvoT3uLBN9YZupY0',
  *   ];
  *
  * File database.local.php tidak ikut terunggah ke repositori dan

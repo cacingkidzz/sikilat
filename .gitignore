@@ -1,7 +1,6 @@
 # SIKILAT - berkas yang tidak perlu masuk repositori
 
 # Dependensi (pasang dengan `composer install`)
-/vendor/
 
 # Konfigurasi lokal & rahasia
 /config/database.local.php

@@ -88,10 +88,13 @@ aplikasi, profil sekolah, logo, serta default akademik**.
     meskipun angkanya sama.
 30. Statistik nilai boleh diagregasi lintas paket karena nilai sudah dinormalisasi.
 31. Tersedia ekspor Excel berisi rekap nilai, rekap kelas, rekap paket, rincian
-    jawaban, dan analisis butir; serta ekspor PDF untuk hasil kelas, analisis,
-    laporan individu siswa, dan distribusi nilai.
-32. Grafik distribusi, rata-rata kelas/paket, persentase benar per butir, dan
-    komposisi tingkat kesukaran memakai Chart.js lokal tanpa inline script.
+    jawaban, dan analisis butir; serta ekspor PDF untuk hasil kelas, analisis
+    (termasuk narasi dan grafik butir/rombel), laporan individu siswa, dan distribusi
+    nilai.
+32. Grafik distribusi, rata-rata kelas/paket, persentase benar per butir, komposisi
+    tingkat kesukaran, kurva sebaran nilai per kelas, ketuntasan per kelas, dan peta
+    butir memakai Chart.js lokal tanpa inline script; versi PDF menggambar grafik
+    sebagai vektor dan menyertakan narasi otomatis.
 33. Guru hanya dapat membuka laporan/analisis/ekspor untuk ujian miliknya; ID ujian
     yang ditebak harus ditolak.
 

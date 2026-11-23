@@ -566,7 +566,142 @@
     color: var(--sikilat-muted);
 }
 
+/* Navigasi tab analisis soal / rombel */
+.report-tabs {
+    gap: 0.4rem;
+}
+
+.report-tabs .nav-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--sikilat-border);
+    border-radius: 0.65rem;
+    background: #fff;
+    color: #475467;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.report-tabs .nav-link:hover {
+    border-color: #b9cdf0;
+    color: var(--sikilat-primary);
+}
+
+.report-tabs .nav-link.active {
+    border-color: var(--sikilat-primary);
+    background: var(--sikilat-primary);
+    color: #fff;
+}
+
+/* Narasi interpretasi otomatis */
+.report-insight {
+    padding: 1rem 1.1rem;
+    border: 1px solid #d8e6ff;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+}
+
+.report-insight-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+}
+
+.report-insight-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    background: #e3efff;
+    color: var(--sikilat-primary);
+    font-size: 1rem;
+}
+
+.report-insight-head h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.report-insight-head p {
+    margin: 0.1rem 0 0;
+    color: var(--sikilat-muted);
+    font-size: 0.73rem;
+}
+
+.report-insight > p {
+    margin: 0 0 0.55rem;
+    color: #3f4f66;
+    font-size: 0.8rem;
+    line-height: 1.55;
+}
+
+.report-insight > p:last-child {
+    margin-bottom: 0;
+}
+
+.report-insight-label {
+    margin: 0.7rem 0 0.3rem;
+    color: var(--sikilat-muted);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.report-insight-list {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0;
+    padding-left: 1.1rem;
+    color: #3f4f66;
+    font-size: 0.79rem;
+    line-height: 1.5;
+}
+
+.report-insight-list-action li::marker {
+    color: var(--sikilat-primary);
+}
+
+.report-insight-compact {
+    padding: 0.85rem 0.95rem;
+    border-color: var(--sikilat-border);
+    background: #fff;
+}
+
+.report-insight-compact > p {
+    font-size: 0.78rem;
+}
+
+.report-chart-label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.2rem 0.5rem;
+    margin-bottom: 0.35rem;
+    color: #34445a;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.report-chart-label span {
+    color: var(--sikilat-muted);
+    font-size: 0.68rem;
+    font-weight: 500;
+}
+
 @media (max-width: 767.98px) {
+    .report-tabs .nav-link {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
     .report-hero {
         padding: 1.1rem;
     }

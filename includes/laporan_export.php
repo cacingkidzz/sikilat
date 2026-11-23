@@ -900,6 +900,41 @@ final class SikilatLaporanPdf extends FPDF
         $this->SetTextColor(16, 24, 40);
         $this->Ln(1.6);
     }
+
+    /**
+     * Garis putus-putus untuk ambang KKM atau batas tingkat kesukaran.
+     */
+    public function dashedLine(
+        float $x1,
+        float $y1,
+        float $x2,
+        float $y2,
+        float $dash = 1.5,
+        float $gap = 1.2
+    ): void {
+        $dx = $x2 - $x1;
+        $dy = $y2 - $y1;
+        $length = sqrt($dx * $dx + $dy * $dy);
+
+        if ($length <= 0.0) {
+            return;
+        }
+
+        $ux = $dx / $length;
+        $uy = $dy / $length;
+        $position = 0.0;
+
+        while ($position < $length) {
+            $end = min($position + $dash, $length);
+            $this->Line(
+                $x1 + $ux * $position,
+                $y1 + $uy * $position,
+                $x1 + $ux * $end,
+                $y1 + $uy * $end
+            );
+            $position = $end + $gap;
+        }
+    }
 }
 
 /**
@@ -1656,9 +1691,950 @@ function laporan_pdf_package_recap(SikilatLaporanPdf $pdf, array $packageSummary
 }
 
 /**
+ * Palet warna grafik laporan PDF.
+ *
+ * @return array<int, array{0:int,1:int,2:int}>
+ */
+function laporan_pdf_chart_palette(): array
+{
+    return [
+        [13, 110, 253],
+        [32, 201, 151],
+        [253, 126, 20],
+        [111, 66, 193],
+        [214, 51, 132],
+        [25, 135, 84],
+        [13, 202, 240],
+        [220, 53, 69],
+    ];
+}
+
+/**
+ * Format angka gaya Indonesia untuk label grafik.
+ */
+function laporan_pdf_chart_number(float $value, int $decimals = 0): string
+{
+    return number_format($value, $decimals, ',', '.');
+}
+
+/**
+ * Atur warna gambar, isi, atau teks dari triplet RGB.
+ *
+ * @param array{0:int,1:int,2:int} $color
+ */
+function laporan_pdf_chart_color(SikilatLaporanPdf $pdf, array $color, string $mode = 'draw'): void
+{
+    if ($mode === 'fill') {
+        $pdf->SetFillColor($color[0], $color[1], $color[2]);
+        return;
+    }
+
+    if ($mode === 'text') {
+        $pdf->SetTextColor($color[0], $color[1], $color[2]);
+        return;
+    }
+
+    $pdf->SetDrawColor($color[0], $color[1], $color[2]);
+}
+
+/**
+ * Bingkai kartu grafik sekaligus area plot di dalamnya.
+ *
+ * @return array{left:float, right:float, top:float, bottom:float}
+ */
+function laporan_pdf_chart_card(
+    SikilatLaporanPdf $pdf,
+    float $x,
+    float $y,
+    float $w,
+    float $h,
+    string $title,
+    string $subtitle = '',
+    float $topPad = 10.5
+): array {
+    $pdf->SetLineWidth(0.22);
+    $pdf->SetDrawColor(222, 230, 242);
+    $pdf->SetFillColor(252, 253, 255);
+    $pdf->Rect($x, $y, $w, $h, 'DF');
+    $pdf->SetFillColor(13, 110, 253);
+    $pdf->Rect($x, $y, $w, 0.9, 'F');
+
+    $pdf->SetFont('Helvetica', 'B', 7.4);
+    $pdf->SetTextColor(11, 42, 94);
+    $pdf->SetXY($x + 3.0, $y + 2.5);
+    $pdf->Cell($w - 6.0, 3.6, $pdf->clipText($pdf->t($title), $w - 6.0), 0, 0, 'L');
+
+    if ($subtitle !== '') {
+        $pdf->SetFont('Helvetica', '', 5.7);
+        $pdf->SetTextColor(120, 132, 150);
+        $pdf->SetXY($x + 3.0, $y + 5.8);
+        $pdf->Cell($w - 6.0, 3.0, $pdf->clipText($pdf->t($subtitle), $w - 6.0), 0, 0, 'L');
+    }
+
+    $pdf->SetTextColor(16, 24, 40);
+    $pdf->SetDrawColor(222, 230, 242);
+    $pdf->SetLineWidth(0.2);
+
+    return [
+        'left'   => $x + 14.0,
+        'right'  => $x + $w - 5.0,
+        'top'    => $y + $topPad,
+        'bottom' => $y + $h - 10.5,
+    ];
+}
+
+/**
+ * Legenda kecil di dalam kartu grafik.
+ *
+ * @param array<int, array{label:string, color:array{0:int,1:int,2:int}}> $entries
+ */
+function laporan_pdf_chart_legend(
+    SikilatLaporanPdf $pdf,
+    float $x,
+    float $y,
+    float $maxWidth,
+    array $entries
+): void {
+    $cursorX = $x;
+    $cursorY = $y;
+
+    foreach ($entries as $entry) {
+        $label = (string) $entry['label'];
+        $color = $entry['color'];
+        $entryWidth = 8.0 + $pdf->GetStringWidth($pdf->t($label));
+
+        if ($cursorX > $x && $cursorX + $entryWidth > $x + $maxWidth) {
+            $cursorX = $x;
+            $cursorY += 3.5;
+        }
+
+        laporan_pdf_chart_color($pdf, $color, 'fill');
+        $pdf->Rect($cursorX, $cursorY - 1.1, 3.4, 1.4, 'F');
+
+        $pdf->SetFont('Helvetica', '', 5.8);
+        $pdf->SetTextColor(84, 98, 120);
+        $pdf->Text($cursorX + 4.4, $cursorY, $pdf->t($label));
+
+        $cursorX += $entryWidth + 3.2;
+    }
+
+    $pdf->SetTextColor(16, 24, 40);
+}
+
+/**
+ * Grafik garis dengan sumbu 0-100%. Dipakai untuk kurva kesukaran butir
+ * dan kurva sebaran nilai per kelas.
+ *
+ * @param array<int, string> $labels
+ * @param array<int, array<string, mixed>> $datasets
+ * @param array<int, array{value:float, label?:string, color?:array{0:int,1:int,2:int}}> $guides
+ */
+function laporan_pdf_line_chart(
+    SikilatLaporanPdf $pdf,
+    float $x,
+    float $y,
+    float $w,
+    float $h,
+    array $labels,
+    array $datasets,
+    string $title,
+    string $subtitle = '',
+    array $guides = []
+): void {
+    $multiple = count($datasets) > 1;
+    $plot = laporan_pdf_chart_card(
+        $pdf,
+        $x,
+        $y,
+        $w,
+        $h,
+        $title,
+        $subtitle,
+        $multiple ? 15.2 : 11.0
+    );
+
+    $left = $plot['left'];
+    $right = $plot['right'];
+    $top = $plot['top'];
+    $bottom = $plot['bottom'];
+    $plotW = max(1.0, $right - $left);
+    $plotH = max(1.0, $bottom - $top);
+    $count = count($labels);
+    $palette = laporan_pdf_chart_palette();
+
+    if ($count === 0 || $datasets === []) {
+        return;
+    }
+
+    if ($multiple) {
+        $entries = [];
+        foreach ($datasets as $index => $dataset) {
+            $entries[] = [
+                'label' => (string) ($dataset['label'] ?? ('Seri ' . ($index + 1))),
+                'color' => $dataset['color'] ?? $palette[$index % count($palette)],
+            ];
+        }
+
+        laporan_pdf_chart_legend($pdf, $left, $plot['top'] - 3.8, $plotW, $entries);
+    }
+
+    $pdf->SetFont('Helvetica', '', 5.6);
+
+    for ($tick = 0; $tick <= 100; $tick += 25) {
+        $tickY = $bottom - ($tick / 100) * $plotH;
+        $pdf->SetDrawColor(234, 240, 248);
+        $pdf->SetLineWidth(0.18);
+        $pdf->Line($left, $tickY, $right, $tickY);
+
+        $label = $tick . '%';
+        $pdf->SetTextColor(125, 137, 155);
+        $pdf->Text($left - 1.6 - $pdf->GetStringWidth($label), $tickY + 1.0, $label);
+    }
+
+    $pdf->SetDrawColor(196, 208, 223);
+    $pdf->SetLineWidth(0.25);
+    $pdf->Line($left, $bottom, $right, $bottom);
+    $pdf->Line($left, $top, $left, $bottom);
+
+    $step = max(1, (int) ceil($count / 9));
+    $pdf->SetFont('Helvetica', '', 5.4);
+    $pdf->SetTextColor(125, 137, 155);
+
+    for ($index = 0; $index < $count; $index++) {
+        if ($index % $step !== 0 && $index !== $count - 1) {
+            continue;
+        }
+
+        $centerX = $count === 1 ? ($left + $right) / 2 : $left + ($index / ($count - 1)) * $plotW;
+        $label = $pdf->t($labels[$index]);
+        $pdf->Text($centerX - $pdf->GetStringWidth($label) / 2, $bottom + 3.3, $label);
+    }
+
+    foreach ($guides as $guide) {
+        $value = max(0.0, min(100.0, (float) $guide['value']));
+        $guideY = $bottom - ($value / 100) * $plotH;
+        $color = $guide['color'] ?? [152, 162, 179];
+
+        laporan_pdf_chart_color($pdf, $color, 'draw');
+        $pdf->SetLineWidth(0.28);
+        $pdf->dashedLine($left, $guideY, $right, $guideY);
+
+        if (($guide['label'] ?? '') !== '') {
+            laporan_pdf_chart_color($pdf, $color, 'text');
+            $pdf->SetFont('Helvetica', 'B', 5.4);
+            $label = $pdf->t((string) $guide['label']);
+            $pdf->Text(
+                $right - $pdf->GetStringWidth($label) - 0.5,
+                max($top + 2.0, $guideY - 0.8),
+                $label
+            );
+        }
+    }
+
+    foreach ($datasets as $index => $dataset) {
+        $color = $dataset['color'] ?? $palette[$index % count($palette)];
+        $values = array_values($dataset['values'] ?? []);
+        $pointColors = array_values($dataset['pointColors'] ?? []);
+        $points = [];
+
+        foreach ($values as $pointIndex => $value) {
+            if ($value === null) {
+                $points[] = null;
+                continue;
+            }
+
+            $centerX = $count === 1
+                ? ($left + $right) / 2
+                : $left + ($pointIndex / ($count - 1)) * $plotW;
+            $value = max(0.0, min(100.0, (float) $value));
+            $points[] = [$centerX, $bottom - ($value / 100) * $plotH];
+        }
+
+        laporan_pdf_chart_color($pdf, $color, 'draw');
+        $pdf->SetLineWidth(0.55);
+        $previous = null;
+
+        foreach ($points as $point) {
+            if ($point === null) {
+                $previous = null;
+                continue;
+            }
+
+            if ($previous !== null) {
+                $pdf->Line($previous[0], $previous[1], $point[0], $point[1]);
+            }
+
+            $previous = $point;
+        }
+
+        foreach ($points as $pointIndex => $point) {
+            if ($point === null) {
+                continue;
+            }
+
+            $dotColor = $pointColors[$pointIndex] ?? $color;
+            laporan_pdf_chart_color($pdf, $dotColor, 'fill');
+            $pdf->Rect($point[0] - 0.75, $point[1] - 0.75, 1.5, 1.5, 'F');
+        }
+    }
+
+    $pdf->SetLineWidth(0.2);
+    $pdf->SetDrawColor(222, 230, 242);
+    $pdf->SetTextColor(16, 24, 40);
+}
+
+/**
+ * Peta butir: tingkat kesukaran (sumbu X) terhadap daya pembeda (sumbu Y).
+ *
+ * @param array<int, array{x:float, y:float, tingkat:string}> $points
+ */
+function laporan_pdf_scatter_chart(
+    SikilatLaporanPdf $pdf,
+    float $x,
+    float $y,
+    float $w,
+    float $h,
+    array $points,
+    string $title,
+    string $subtitle
+): void {
+    $plot = laporan_pdf_chart_card($pdf, $x, $y, $w, $h, $title, $subtitle, 11.0);
+
+    $left = $plot['left'] + 2.0;
+    $right = $plot['right'];
+    $top = $plot['top'];
+    $bottom = $plot['bottom'];
+    $plotW = max(1.0, $right - $left);
+    $plotH = max(1.0, $bottom - $top);
+    $yMin = -0.2;
+    $yMax = 1.0;
+
+    // Latar kuadran: sukar, sedang, mudah.
+    $zones = [
+        [0.0, 0.3, [253, 242, 242]],
+        [0.3, 0.7, [255, 250, 235]],
+        [0.7, 1.0, [240, 251, 246]],
+    ];
+
+    foreach ($zones as [$from, $to, $color]) {
+        $pdf->SetFillColor($color[0], $color[1], $color[2]);
+        $pdf->Rect(
+            $left + $from * $plotW,
+            $top,
+            ($to - $from) * $plotW,
+            $plotH,
+            'F'
+        );
+    }
+
+    $pdf->SetFont('Helvetica', '', 5.4);
+
+    foreach ([0, 20, 40, 60, 80, 100] as $tick) {
+        $tickX = $left + ($tick / 100) * $plotW;
+        $pdf->SetDrawColor(231, 238, 247);
+        $pdf->SetLineWidth(0.18);
+        $pdf->Line($tickX, $top, $tickX, $bottom);
+        $pdf->SetTextColor(125, 137, 155);
+        $label = $tick . '%';
+        $pdf->Text($tickX - $pdf->GetStringWidth($label) / 2, $bottom + 3.3, $label);
+    }
+
+    for ($tick = -0.2; $tick <= 1.0001; $tick += 0.2) {
+        $tickY = $bottom - (($tick - $yMin) / ($yMax - $yMin)) * $plotH;
+        $pdf->SetDrawColor(231, 238, 247);
+        $pdf->SetLineWidth(0.18);
+        $pdf->Line($left, $tickY, $right, $tickY);
+
+        $label = laporan_pdf_chart_number($tick, 1);
+        $pdf->SetTextColor(125, 137, 155);
+        $pdf->Text($left - 1.5 - $pdf->GetStringWidth($label), $tickY + 1.0, $label);
+    }
+
+    // Garis ambang kesukaran dan DP nol.
+    foreach ([30, 70] as $threshold) {
+        $tickX = $left + ($threshold / 100) * $plotW;
+        $pdf->SetDrawColor(152, 162, 179);
+        $pdf->SetLineWidth(0.28);
+        $pdf->dashedLine($tickX, $top, $tickX, $bottom);
+        $pdf->SetFont('Helvetica', 'B', 5.2);
+        $pdf->SetTextColor(125, 137, 155);
+        $pdf->Text($tickX + 0.8, $top + 2.4, $threshold . '%');
+    }
+
+    $zeroY = $bottom - ((0.0 - $yMin) / ($yMax - $yMin)) * $plotH;
+    $pdf->SetDrawColor(152, 162, 179);
+    $pdf->SetLineWidth(0.28);
+    $pdf->dashedLine($left, $zeroY, $right, $zeroY);
+    $pdf->SetFont('Helvetica', 'B', 5.2);
+    $pdf->SetTextColor(125, 137, 155);
+    $pdf->Text($right - $pdf->GetStringWidth('DP 0') - 0.5, $zeroY - 0.8, 'DP 0');
+
+    foreach ($points as $point) {
+        $valueX = max(0.0, min(100.0, (float) $point['x']));
+        $valueY = max($yMin, min($yMax, (float) $point['y']));
+        $centerX = $left + ($valueX / 100) * $plotW;
+        $centerY = $bottom - (($valueY - $yMin) / ($yMax - $yMin)) * $plotH;
+
+        $color = match ($point['tingkat'] ?? 'Sedang') {
+            'Mudah' => [32, 201, 151],
+            'Sukar' => [220, 53, 69],
+            default => [255, 193, 7],
+        };
+
+        laporan_pdf_chart_color($pdf, $color, 'fill');
+        $pdf->Rect($centerX - 0.8, $centerY - 0.8, 1.6, 1.6, 'F');
+    }
+
+    laporan_pdf_chart_legend(
+        $pdf,
+        $left,
+        $bottom + 6.0,
+        $plotW,
+        [
+            ['label' => 'Mudah', 'color' => [32, 201, 151]],
+            ['label' => 'Sedang', 'color' => [255, 193, 7]],
+            ['label' => 'Sukar', 'color' => [220, 53, 69]],
+        ]
+    );
+
+    $pdf->SetLineWidth(0.2);
+    $pdf->SetDrawColor(222, 230, 242);
+    $pdf->SetTextColor(16, 24, 40);
+}
+
+/**
+ * Grafik batang horizontal rata-rata nilai kelas dengan garis KKM.
+ *
+ * @param array<int, array<string, mixed>> $classes
+ */
+function laporan_pdf_class_average_chart(
+    SikilatLaporanPdf $pdf,
+    float $x,
+    float $y,
+    float $w,
+    float $h,
+    array $classes,
+    float $kkm,
+    string $title
+): void {
+    $plot = laporan_pdf_chart_card(
+        $pdf,
+        $x,
+        $y,
+        $w,
+        $h,
+        $title,
+        'Hijau di atas KKM, merah di bawah KKM',
+        11.0
+    );
+
+    $classes = array_slice(array_values($classes), 0, 10);
+    if ($classes === []) {
+        return;
+    }
+
+    $left = $x + 33.0;
+    $right = $x + $w - 11.0;
+    $top = $plot['top'];
+    $bottom = $plot['bottom'];
+    $plotW = max(1.0, $right - $left);
+    $plotH = max(1.0, $bottom - $top);
+    $rowH = $plotH / count($classes);
+
+    $pdf->SetFont('Helvetica', '', 5.4);
+
+    foreach ([0, 20, 40, 60, 80, 100] as $tick) {
+        $tickX = $left + ($tick / 100) * $plotW;
+        $pdf->SetDrawColor(234, 240, 248);
+        $pdf->SetLineWidth(0.18);
+        $pdf->Line($tickX, $top, $tickX, $bottom);
+        $pdf->SetTextColor(125, 137, 155);
+        $label = (string) $tick;
+        $pdf->Text($tickX - $pdf->GetStringWidth($label) / 2, $bottom + 3.3, $label);
+    }
+
+    $kkmX = $left + (max(0.0, min(100.0, $kkm)) / 100) * $plotW;
+    $pdf->SetDrawColor(220, 53, 69);
+    $pdf->SetLineWidth(0.3);
+    $pdf->dashedLine($kkmX, $top, $kkmX, $bottom);
+    $pdf->SetFont('Helvetica', 'B', 5.2);
+    $pdf->SetTextColor(220, 53, 69);
+    $pdf->Text($kkmX + 0.8, $top + 2.4, 'KKM ' . laporan_pdf_chart_number($kkm, 2));
+
+    foreach ($classes as $index => $class) {
+        $value = max(0.0, min(100.0, (float) ($class['rata'] ?? 0)));
+        $centerY = $top + ($index + 0.5) * $rowH;
+        $barH = min(4.0, $rowH * 0.62);
+        $barW = ($value / 100) * $plotW;
+
+        $pdf->SetFont('Helvetica', '', 5.8);
+        $pdf->SetTextColor(52, 68, 90);
+        $pdf->Text(
+            $x + 3.0,
+            $centerY + 0.9,
+            $pdf->clipText($pdf->t((string) $class['kelas_nama']), 28.0)
+        );
+
+        if ($barW > 0) {
+            $color = $value + 0.00001 >= $kkm ? [25, 135, 84] : [220, 53, 69];
+            laporan_pdf_chart_color($pdf, $color, 'fill');
+            $pdf->Rect($left, $centerY - $barH / 2, $barW, $barH, 'F');
+        }
+
+        $pdf->SetFont('Helvetica', 'B', 5.4);
+        $pdf->SetTextColor(52, 68, 90);
+        $pdf->Text($left + $barW + 1.4, $centerY + 0.9, laporan_pdf_chart_number($value, 2));
+    }
+
+    $pdf->SetLineWidth(0.2);
+    $pdf->SetDrawColor(222, 230, 242);
+    $pdf->SetTextColor(16, 24, 40);
+}
+
+/**
+ * Grafik batang bertumpuk ketuntasan per kelas (100%).
+ *
+ * @param array<int, array<string, mixed>> $classes
+ */
+function laporan_pdf_class_completion_chart(
+    SikilatLaporanPdf $pdf,
+    float $x,
+    float $y,
+    float $w,
+    float $h,
+    array $classes,
+    string $title
+): void {
+    $plot = laporan_pdf_chart_card(
+        $pdf,
+        $x,
+        $y,
+        $w,
+        $h,
+        $title,
+        'Hijau tuntas, merah belum tuntas',
+        11.0
+    );
+
+    $classes = array_slice(array_values($classes), 0, 10);
+    if ($classes === []) {
+        return;
+    }
+
+    $left = $x + 33.0;
+    $right = $x + $w - 15.0;
+    $top = $plot['top'];
+    $bottom = $plot['bottom'];
+    $plotW = max(1.0, $right - $left);
+    $plotH = max(1.0, $bottom - $top);
+    $rowH = $plotH / count($classes);
+
+    $pdf->SetFont('Helvetica', '', 5.4);
+
+    foreach ([0, 25, 50, 75, 100] as $tick) {
+        $tickX = $left + ($tick / 100) * $plotW;
+        $pdf->SetDrawColor(234, 240, 248);
+        $pdf->SetLineWidth(0.18);
+        $pdf->Line($tickX, $top, $tickX, $bottom);
+        $pdf->SetTextColor(125, 137, 155);
+        $label = $tick . '%';
+        $pdf->Text($tickX - $pdf->GetStringWidth($label) / 2, $bottom + 3.3, $label);
+    }
+
+    foreach ($classes as $index => $class) {
+        $percent = max(0.0, min(100.0, (float) ($class['persen_tuntas'] ?? 0)));
+        $centerY = $top + ($index + 0.5) * $rowH;
+        $barH = min(4.0, $rowH * 0.62);
+        $tuntasW = ($percent / 100) * $plotW;
+
+        $pdf->SetFont('Helvetica', '', 5.8);
+        $pdf->SetTextColor(52, 68, 90);
+        $pdf->Text(
+            $x + 3.0,
+            $centerY + 0.9,
+            $pdf->clipText($pdf->t((string) $class['kelas_nama']), 28.0)
+        );
+
+        $pdf->SetFillColor(25, 135, 84);
+        $pdf->Rect($left, $centerY - $barH / 2, $tuntasW, $barH, 'F');
+        $pdf->SetFillColor(227, 93, 106);
+        $pdf->Rect($left + $tuntasW, $centerY - $barH / 2, $plotW - $tuntasW, $barH, 'F');
+
+        $pdf->SetFont('Helvetica', 'B', 5.2);
+        $pdf->SetTextColor(52, 68, 90);
+        $pdf->Text(
+            $right + 1.6,
+            $centerY + 0.9,
+            (int) ($class['tuntas'] ?? 0) . '/' . (int) ($class['jumlah'] ?? 0)
+        );
+    }
+
+    $pdf->SetLineWidth(0.2);
+    $pdf->SetDrawColor(222, 230, 242);
+    $pdf->SetTextColor(16, 24, 40);
+}
+
+/**
+ * Subjudul kecil untuk blok narasi.
+ */
+function laporan_pdf_subheading(SikilatLaporanPdf $pdf, string $text): void
+{
+    $pdf->ensureSpace(8);
+    $pdf->SetFont('Helvetica', 'B', 8.2);
+    $pdf->SetTextColor(11, 42, 94);
+    $pdf->Cell(
+        0,
+        5.2,
+        $pdf->clipText($pdf->t($text), $pdf->contentWidth()),
+        0,
+        1,
+        'L'
+    );
+    $pdf->SetTextColor(16, 24, 40);
+    $pdf->Ln(0.8);
+}
+
+/**
+ * Blok narasi: paragraf penjelasan dan daftar tindak lanjut.
+ *
+ * @param array<int, string> $paragraphs
+ * @param array<string, array<int, string>> $lists
+ */
+function laporan_pdf_narrative_body(SikilatLaporanPdf $pdf, array $paragraphs, array $lists = []): void
+{
+    $width = $pdf->contentWidth();
+    $pdf->SetTextColor(63, 79, 102);
+
+    foreach ($paragraphs as $paragraph) {
+        if (trim($paragraph) === '') {
+            continue;
+        }
+
+        $pdf->ensureSpace(8);
+        $pdf->SetFont('Helvetica', '', 7.7);
+        $pdf->MultiCell($width, 4.1, $pdf->t($paragraph), 0, 'L');
+        $pdf->Ln(1.1);
+    }
+
+    foreach ($lists as $label => $items) {
+        if ($items === []) {
+            continue;
+        }
+
+        $pdf->ensureSpace(9);
+        $pdf->SetFont('Helvetica', 'B', 6.4);
+        $pdf->SetTextColor(112, 124, 142);
+        $pdf->Cell($width, 3.6, $pdf->t(strtoupper($label)), 0, 1, 'L');
+
+        $pdf->SetFont('Helvetica', '', 7.4);
+        $pdf->SetTextColor(63, 79, 102);
+
+        foreach ($items as $item) {
+            $pdf->ensureSpace(6);
+            $pdf->SetX($pdf->leftMargin() + 2.0);
+            $pdf->MultiCell($width - 2.0, 3.9, $pdf->t('- ' . $item), 0, 'L');
+            $pdf->Ln(0.4);
+        }
+
+        $pdf->Ln(1.0);
+    }
+
+    $pdf->SetTextColor(16, 24, 40);
+    $pdf->Ln(0.6);
+}
+
+/**
+ * Grafik karakteristik butir untuk satu paket: kurva kesukaran dan peta butir.
+ *
+ * @param array<string, mixed> $package
+ */
+function laporan_pdf_package_charts(SikilatLaporanPdf $pdf, array $package): void
+{
+    $items = $package['items'] ?? [];
+    if ($items === []) {
+        return;
+    }
+
+    $labels = [];
+    $values = [];
+    $pointColors = [];
+    $scatter = [];
+    $difficultyColors = [
+        'Mudah' => [32, 201, 151],
+        'Sedang' => [255, 193, 7],
+        'Sukar' => [220, 53, 69],
+    ];
+
+    foreach ($items as $item) {
+        $labels[] = (string) (int) $item['nomor'];
+        $values[] = (float) $item['persen_benar'];
+        $tingkat = (string) $item['tingkat_kesukaran'];
+        $pointColors[] = $difficultyColors[$tingkat] ?? [152, 162, 179];
+
+        if ($item['daya_pembeda'] !== null) {
+            $scatter[] = [
+                'x' => (float) $item['persen_benar'],
+                'y' => (float) $item['daya_pembeda'],
+                'tingkat' => $tingkat,
+            ];
+        }
+    }
+
+    $guides = [
+        ['value' => 30.0, 'label' => '30%', 'color' => [220, 53, 69]],
+        ['value' => 70.0, 'label' => '70%', 'color' => [32, 201, 151]],
+    ];
+    $datasets = [[
+        'label' => 'Jawaban benar',
+        'values' => $values,
+        'color' => [13, 110, 253],
+        'pointColors' => $pointColors,
+    ]];
+
+    $landscape = $pdf->GetPageWidth() >= 250;
+    $chartH = $landscape ? 58.0 : 56.0;
+    $gap = 4.0;
+    $hasMap = $scatter !== [];
+
+    if ($landscape) {
+        $chartW = ($pdf->contentWidth() - ($hasMap ? $gap : 0.0)) / ($hasMap ? 2 : 1);
+        $pdf->ensureSpace($chartH + 5);
+        $chartY = $pdf->GetY();
+        $chartX = $pdf->leftMargin();
+
+        laporan_pdf_line_chart(
+            $pdf,
+            $chartX,
+            $chartY,
+            $chartW,
+            $chartH,
+            $labels,
+            $datasets,
+            'Kurva Tingkat Kesukaran',
+            'Persentase jawaban benar per nomor',
+            $guides
+        );
+
+        if ($hasMap) {
+            laporan_pdf_scatter_chart(
+                $pdf,
+                $chartX + $chartW + $gap,
+                $chartY,
+                $chartW,
+                $chartH,
+                $scatter,
+                'Peta Butir',
+                'Kesukaran x daya pembeda, kanan-atas ideal'
+            );
+        }
+
+        $pdf->SetY($chartY + $chartH + 3.0);
+    } else {
+        $chartW = $pdf->contentWidth();
+        $chartX = $pdf->leftMargin();
+
+        $pdf->ensureSpace($chartH + 5);
+        $chartY = $pdf->GetY();
+        laporan_pdf_line_chart(
+            $pdf,
+            $chartX,
+            $chartY,
+            $chartW,
+            $chartH,
+            $labels,
+            $datasets,
+            'Kurva Tingkat Kesukaran',
+            'Persentase jawaban benar per nomor',
+            $guides
+        );
+        $pdf->SetY($chartY + $chartH + 3.0);
+
+        if ($hasMap) {
+            $pdf->ensureSpace($chartH + 5);
+            $chartY = $pdf->GetY();
+            laporan_pdf_scatter_chart(
+                $pdf,
+                $chartX,
+                $chartY,
+                $chartW,
+                $chartH,
+                $scatter,
+                'Peta Butir',
+                'Kesukaran x daya pembeda, kanan-atas ideal'
+            );
+            $pdf->SetY($chartY + $chartH + 3.0);
+        }
+    }
+}
+
+/**
+ * Bagian analisis rombel: narasi, kurva sebaran, ketuntasan, dan rata-rata.
+ *
+ * @param array<int, array<string, mixed>> $results
+ * @param array<int, array<string, mixed>> $classSummary
+ */
+function laporan_pdf_rombel_analysis(
+    SikilatLaporanPdf $pdf,
+    array $results,
+    array $classSummary,
+    float $kkm
+): void {
+    if ($results === [] || $classSummary === []) {
+        return;
+    }
+
+    $distribution = laporan_class_distribution($results);
+    $summary = laporan_summary($results, $kkm);
+    $narrative = laporan_rombel_narrative($classSummary, $distribution, $summary, $kkm);
+
+    $pdf->ensureSpace(42);
+    $pdf->sectionTitle('Analisis Rombel');
+    laporan_pdf_narrative_body(
+        $pdf,
+        $narrative['ringkasan'],
+        [
+            'Sorotan per kelas' => $narrative['sorotan'],
+            'Tindak lanjut' => $narrative['rekomendasi'],
+        ]
+    );
+
+    $bars = array_values($classSummary);
+    usort($bars, static function (array $a, array $b): int {
+        return ((int) $b['jumlah'] <=> (int) $a['jumlah'])
+            ?: strcmp((string) $a['kelas_nama'], (string) $b['kelas_nama']);
+    });
+    $bars = array_slice($bars, 0, 10);
+
+    $bins = laporan_distribution_bins();
+    $labels = array_map(static fn (array $bin): string => (string) $bin['label'], $bins);
+    $distributionMap = [];
+    foreach ($distribution as $row) {
+        $distributionMap[(int) $row['kelas_id']] = $row;
+    }
+
+    $palette = laporan_pdf_chart_palette();
+    $datasets = [];
+    foreach (array_slice($bars, 0, 8) as $index => $class) {
+        $dist = $distributionMap[(int) $class['kelas_id']] ?? null;
+        if ($dist === null) {
+            continue;
+        }
+
+        $datasets[] = [
+            'label' => (string) $class['kelas_nama'],
+            'values' => $dist['persen'],
+            'color' => $palette[$index % count($palette)],
+        ];
+    }
+
+    $portrait = $pdf->GetPageWidth() < 250;
+    $chartH = $portrait ? 54.0 : 60.0;
+    $gap = 4.0;
+
+    if ($portrait) {
+        $chartW = $pdf->contentWidth();
+        $chartX = $pdf->leftMargin();
+
+        $pdf->ensureSpace($chartH + 5);
+        $chartY = $pdf->GetY();
+        laporan_pdf_class_average_chart(
+            $pdf,
+            $chartX,
+            $chartY,
+            $chartW,
+            $chartH,
+            $bars,
+            $kkm,
+            'Rata-rata Nilai per Kelas'
+        );
+        $pdf->SetY($chartY + $chartH + 3.0);
+
+        $pdf->ensureSpace($chartH + 5);
+        $chartY = $pdf->GetY();
+        laporan_pdf_class_completion_chart(
+            $pdf,
+            $chartX,
+            $chartY,
+            $chartW,
+            $chartH,
+            $bars,
+            'Ketuntasan per Kelas'
+        );
+        $pdf->SetY($chartY + $chartH + 3.0);
+
+        if ($datasets !== []) {
+            $pdf->ensureSpace($chartH + 5);
+            $chartY = $pdf->GetY();
+            laporan_pdf_line_chart(
+                $pdf,
+                $chartX,
+                $chartY,
+                $chartW,
+                $chartH,
+                $labels,
+                $datasets,
+                'Kurva Sebaran Nilai per Kelas',
+                'Persentase peserta tiap rentang nilai'
+            );
+            $pdf->SetY($chartY + $chartH + 3.0);
+        }
+    } else {
+        $chartW = ($pdf->contentWidth() - $gap) / 2;
+        $chartX = $pdf->leftMargin();
+
+        $pdf->ensureSpace($chartH + 5);
+        $chartY = $pdf->GetY();
+        laporan_pdf_class_average_chart(
+            $pdf,
+            $chartX,
+            $chartY,
+            $chartW,
+            $chartH,
+            $bars,
+            $kkm,
+            'Rata-rata Nilai per Kelas'
+        );
+        laporan_pdf_class_completion_chart(
+            $pdf,
+            $chartX + $chartW + $gap,
+            $chartY,
+            $chartW,
+            $chartH,
+            $bars,
+            'Ketuntasan per Kelas'
+        );
+        $pdf->SetY($chartY + $chartH + 3.0);
+
+        if ($datasets !== []) {
+            $pdf->ensureSpace($chartH + 5);
+            $chartY = $pdf->GetY();
+            laporan_pdf_line_chart(
+                $pdf,
+                $chartX,
+                $chartY,
+                $pdf->contentWidth(),
+                $chartH,
+                $labels,
+                $datasets,
+                'Kurva Sebaran Nilai per Kelas',
+                'Persentase peserta tiap rentang nilai'
+            );
+            $pdf->SetY($chartY + $chartH + 3.0);
+        }
+    }
+
+    if (count($classSummary) > 10) {
+        $pdf->note(
+            'Grafik batang menampilkan 10 kelas dengan peserta terbanyak. Seluruh kelas tetap '
+            . 'tercantum pada tabel rekap.'
+        );
+    }
+}
+
+/**
  * @param array<int, array<string, mixed>> $items
  */
-function laporan_pdf_item_analysis(SikilatLaporanPdf $pdf, array $items): void
+function laporan_pdf_item_analysis(SikilatLaporanPdf $pdf, array $items, int $peserta = 0): void
 {
     $pdf->ensureSpace(62);
     $pdf->sectionTitle('Analisis Butir per Paket');
@@ -1671,6 +2647,19 @@ function laporan_pdf_item_analysis(SikilatLaporanPdf $pdf, array $items): void
         laporan_pdf_empty($pdf, 'Belum ada jawaban siswa yang dapat dianalisis.');
         return;
     }
+
+    if ($peserta <= 0) {
+        $peserta = (int) array_sum(array_column($items, 'peserta'));
+    }
+
+    $overview = laporan_item_overview($items);
+    $itemNarrative = laporan_item_narrative($items, $overview, $peserta);
+    laporan_pdf_subheading($pdf, 'Interpretasi Analisis Soal');
+    laporan_pdf_narrative_body(
+        $pdf,
+        $itemNarrative['ringkasan'],
+        ['Tindak lanjut' => $itemNarrative['rekomendasi']]
+    );
 
     $letters = soal_option_letters_from_items($items);
     if ($letters === []) {
@@ -1692,7 +2681,7 @@ function laporan_pdf_item_analysis(SikilatLaporanPdf $pdf, array $items): void
     $kosongIndex = $optionStart + count($letters);
 
     foreach ($items as $package) {
-        $pdf->ensureSpace(34);
+        $pdf->ensureSpace(100);
 
         $pdf->SetFont('Helvetica', 'B', 9.2);
         $pdf->SetTextColor(11, 42, 94);
@@ -1724,6 +2713,17 @@ function laporan_pdf_item_analysis(SikilatLaporanPdf $pdf, array $items): void
         $pdf->SetTextColor(16, 24, 40);
         $pdf->Ln(1.4);
 
+        laporan_pdf_package_charts($pdf, $package);
+
+        $packageNarrative = laporan_package_narrative($package);
+        laporan_pdf_subheading($pdf, 'Catatan Paket ' . (string) $package['kode_paket']);
+        laporan_pdf_narrative_body(
+            $pdf,
+            $packageNarrative['paragraf'],
+            ['Tindak lanjut' => $packageNarrative['rekomendasi']]
+        );
+
+        $pdf->ensureSpace(18);
         laporan_pdf_table_header($pdf, $headers, $widths, $aligns);
 
         foreach ($package['items'] as $item) {
@@ -2086,7 +3086,7 @@ function laporan_pdf_build(
 
     switch ($jenis) {
         case 'analisis':
-            $pdf = laporan_pdf_doc('Laporan Analisis Nilai dan Butir', $subscript, 'L');
+            $pdf = laporan_pdf_doc('Laporan Analisis Soal dan Rombel', $subscript, 'L');
             laporan_pdf_exam_info($pdf, $exam, $selectedClass, $packages, $kkm, count($results));
             laporan_pdf_summary($pdf, $summary, $kkm);
 
@@ -2096,8 +3096,10 @@ function laporan_pdf_build(
                 break;
             }
 
+            laporan_pdf_rombel_analysis($pdf, $results, $classSummary, $kkm);
+            laporan_pdf_class_recap($pdf, $classSummary, $summary);
             laporan_pdf_package_recap($pdf, $packageSummary, $summary);
-            laporan_pdf_item_analysis($pdf, $items);
+            laporan_pdf_item_analysis($pdf, $items, count($results));
             laporan_pdf_signature($pdf);
             break;
 
@@ -2163,6 +3165,7 @@ function laporan_pdf_build(
 
             laporan_pdf_distribution($pdf, $distribution, count($results));
             laporan_pdf_class_recap($pdf, $classSummary, $summary);
+            laporan_pdf_rombel_analysis($pdf, $results, $classSummary, $kkm);
 
             $needed = 18.0 + count($packageSummary) * 5.8 + 46.0;
             if ($pdf->GetY() + $needed > $pdf->bottomLimit()) {

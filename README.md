@@ -367,7 +367,7 @@ dapat membuka ujian miliknya sendiri.
 
 ```text
 admin/laporan/index.php     → hub laporan: metrik, distribusi, rekap kelas/paket, daftar nilai
-admin/analisis/index.php    → analisis nilai dan analisis butir per paket
+admin/analisis/index.php    → analisis butir per paket dan analisis rombel (grafik + narasi)
 admin/laporan/excel.php     → unduhan .xlsx (5 lembar)
 admin/laporan/pdf.php       → unduhan .pdf (kelas | analisis | siswa | distribusi)
 ```
@@ -382,6 +382,7 @@ admin/laporan/pdf.php       → unduhan .pdf (kelas | analisis | siswa | distrib
 | Rincian jawaban | Nomor soal, jawaban siswa, kunci, hasil (benar/salah/kosong) per peserta |
 | Distribusi nilai | Enam rentang: 0–49, 50–59, 60–69, 70–79, 80–89, 90–100 |
 | Analisis butir | Kunci, jumlah/persen benar, tingkat kesukaran, daya pembeda, sebaran A–E, pengecoh efektif |
+| Analisis rombel | Perbandingan rata-rata, ketuntasan, sebaran nilai, dan rentang dominan tiap kelas |
 
 ### 9.2 Rumus dan ambang batas
 
@@ -411,18 +412,26 @@ admin/laporan/pdf.php       → unduhan .pdf (kelas | analisis | siswa | distrib
   `Rekap Paket`, `Rincian Jawaban`, dan `Analisis Butir`. Sel ditulis dengan tipe
   eksplisit sehingga teks berawalan `=` tidak dieksekusi sebagai formula.
 - **PDF** — FPDF dengan font inti Helvetica; teks UTF-8 ditransliterasi ke Latin-1.
-  Jenis: `kelas` (rekap + daftar nilai), `analisis` (nilai + butir per paket),
-  `siswa` (identitas + rincian jawaban), `distribusi` (sebaran + rekap kelas).
+  Jenis: `kelas` (rekap + daftar nilai), `analisis` (nilai, narasi, kurva kesukaran,
+  peta butir, dan analisis rombel), `siswa` (identitas + rincian jawaban), `distribusi`
+  (sebaran, rekap kelas, kurva rombel, dan ketuntasan). Grafik digambar sebagai vektor
+  langsung di PDF sehingga tetap tajam tanpa bergantung pada Chart.js.
 - Nama berkas memuat nama ujian, kelas (bila dipilih), dan tanggal ekspor.
 - Ekspor memakai filter yang sama dengan halaman; parameter ujian/kelas/hasil
   divalidasi ulang di server. Ujian atau hasil yang bukan hak akses pengguna ditolak.
 
-### 9.5 Grafik
+### 9.5 Grafik dan narasi
 
 Grafik memakai Chart.js lokal dan membaca data dari atribut `data-*` pada `<canvas>`,
 sehingga tetap patuh pada CSP `script-src 'self'` tanpa inline script. Grafik yang
 tersedia: distribusi nilai, rata-rata per paket, rata-rata per kelas, persentase benar
-per butir, dan komposisi tingkat kesukaran.
+per butir, komposisi tingkat kesukaran, kurva sebaran nilai per kelas, ketuntasan per
+kelas, dan peta butir (kesukaran × daya pembeda).
+
+Halaman analisis juga menyusun **narasi otomatis**: interpretasi analisis soal,
+catatan per paket, serta sorotan dan tindak lanjut analisis rombel. Narasi memberi
+catatan kelayakan data bila peserta per paket kurang dari 4 atau peserta per kelas
+kurang dari 5. Ekspor PDF memuat grafik vektor dan narasi yang sama.
 
 ### 9.6 Hak akses
 
@@ -704,6 +713,9 @@ Seluruh fixture dan berkas uji dihapus kembali setelah validasi.
 - [x] **PDF** — jenis kelas, analisis, distribusi, dan siswa menghasilkan berkas diawali
   `%PDF-`, berakhiran `%%EOF`, dan minimal satu halaman; analisis dan rekap kelas
   multi-halaman.
+- [x] **PDF visual** — halaman analisis dan distribusi dirender ulang ke PNG untuk
+  memeriksa kurva kesukaran, peta butir, kurva sebaran per kelas, ketuntasan, rata-rata
+  per kelas, narasi, dan tanda tangan; tidak ada elemen terpotong.
 - [x] **Endpoint** — ekspor seluruh ujian, per kelas, dan ujian kedua menghasilkan isi
   yang berbeda dan sesuai filter; jenis laporan tidak valid ditolak dengan pesan
   “Jenis Laporan Tidak Valid”.

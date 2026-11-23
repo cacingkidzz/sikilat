@@ -469,14 +469,14 @@ require INCLUDES_PATH . '/header.php';
                         <span class="report-export-icon pdf"><i class="bi bi-file-earmark-bar-graph"></i></span>
                         <span class="report-export-text">
                             <strong>PDF Analisis</strong>
-                            <small>Analisis nilai, butir, daya pembeda, pengecoh</small>
+                            <small>Narasi, kurva butir, peta butir, dan analisis rombel</small>
                         </span>
                     </a>
                     <a class="report-export-card" href="<?= e(url($exportBase . 'pdf.php?jenis=distribusi&' . $filterQuery)) ?>">
                         <span class="report-export-icon pdf"><i class="bi bi-bar-chart-steps"></i></span>
                         <span class="report-export-text">
                             <strong>PDF Distribusi</strong>
-                            <small>Sebaran nilai dan rekap per kelas</small>
+                            <small>Sebaran nilai, kurva rombel, dan ketuntasan kelas</small>
                         </span>
                     </a>
                 </div>
